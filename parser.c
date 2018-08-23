@@ -29,8 +29,26 @@ void add_history(char* unused){}
 #include <editline/history.h>
 #endif
 
-long eval(mpc_ast_t* t);
-long eval_op(long x, char* op, long y);
+//data structures
+//lisp value - return type of many funcs
+typedef struct 
+{
+	int type;
+	long num;
+	int err;
+} lval;
+//possible lval types
+enum{LVAL_NUM, LVAL_ERR};
+//possible error types
+enum{LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM};
+
+//prototypes
+lval eval(mpc_ast_t* t);
+lval eval_op(lval x, char* op, lval y);
+lval lval_num(long x);
+lval lval_err(int x);
+void lval_print(lval v);
+void lval_println(lval v);
 
 //argc is argument count, argv is argument vector
 //char** is a list of strings (approximately)
@@ -46,7 +64,7 @@ int main(int argc, char** argv)
 	mpca_lang(MPCA_LANG_DEFAULT, 
 	"\
 	 number : /-?[0-9]+(\\.[0-9]+)?/ ; \
-	 operator : '+' | '-' | '*' | '/' ; \
+	 operator : '+' | '-' | '*' | '/' | '%' | '^' | \"min\" | \"max\" ; \
 	 expr : <number> | '(' <operator> <expr>+ ')'; \
 	 lispy : /^/ <operator> <expr>+ /$/; \
 	",
@@ -64,8 +82,8 @@ int main(int argc, char** argv)
 		if(mpc_parse("<stdin>", input, Lispy, &r))
 		{
 			//mpc_ast_print(r.output);
-			long result=eval(r.output);
-			printf("%li\n", result);
+			lval result=eval(r.output);
+			lval_println(result);
 			mpc_ast_delete(r.output);	
 		}
 		else
@@ -79,42 +97,91 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-long eval(mpc_ast_t* t)
+lval eval(mpc_ast_t* t)
 {
 	//if tag has number in it return it directly (base case)
 	if(strstr(t->tag, "number"))
-		return atoi(t->contents);
+	{
+		errno=0;
+		long x=strtol(t->contents, NULL, 10);
+		return errno != ERANGE?lval_num(x):lval_err(LERR_BAD_NUM);
+	}
 	//first child is (
 	char* op=t->children[1]->contents;
-	long x=eval(t->children[2]);
+	lval x=eval(t->children[2]);
+	//if there is only one argument to the operator
+	if(t->children_num == 4)
+	{
+		if(strcmp(op, "-")==0)
+			return lval_num(-1*x.num);
+		else
+			return lval_err(LERR_BAD_OP);
+	}
 	for(int i=3; i<t->children_num && strstr(t->children[i]->tag, "expr"); i++)
 		x = eval_op(x, op, eval(t->children[i]));
 	return x;
 }
 
-long eval_op(long x, char* op, long y)
+lval eval_op(lval x, char* op, lval y)
 {
-	/*if(strcmp(op, "*")==0)
-		return x*y;
+	if(x.type == LVAL_ERR) return x;
+	if(y.type == LVAL_ERR) return y;
+	if(strcmp(op, "*")==0)
+		return lval_num(x.num*y.num);
 	if(strcmp(op, "+")==0)
-		return x+y;
+		return lval_num(x.num+y.num);
 	if(strcmp(op, "-")==0)
-		return x-y;
+		return lval_num(x.num-y.num);
 	if(strcmp(op, "/")==0)
-		return x/y;*/
-	//not sure if this way is cleaner or not, but i kinda like it
-	switch(op[0])
+		return y.num==0?lval_err(LERR_DIV_ZERO):lval_num(x.num/y.num);
+	if(strcmp(op, "%")==0)
+		return y.num==0?lval_err(LERR_DIV_ZERO):lval_num(x.num-y.num*(x.num/y.num));
+	if(strcmp(op, "^")==0)
 	{
-		case 42: return x*y;
-		case 43: return x+y;
-		case 45: return x-y;
-		case 47: return x/y;
+		long r=1;
+		for(int i=0; i<y.num; i++)
+			r*=x.num;
+		return lval_num(r);
 	}
-	return 0;
+	if(strcmp(op, "min")==0)
+		return x.num<y.num?x:y;
+	if(strcmp(op, "max")==0)
+		return x.num>y.num?x:y;
+	return lval_err(LERR_BAD_OP);
 }
 
+lval lval_num(long x)
+{
+	lval v;
+	v.type = LVAL_NUM;
+	v.num = x;
+	return v;
+}
 
+lval lval_err(int x)
+{
+	lval v;
+	v.type = LVAL_ERR;
+	v.err = x;
+	return v;
+}
 
+void lval_print(lval v)
+{
+	switch(v.type)
+	{
+		case LVAL_NUM: printf("%li", v.num); break;
+		case LVAL_ERR:
+			switch(v.err)
+			{
+				case LERR_DIV_ZERO: printf("Error: Division by zero"); break;
+				case LERR_BAD_OP  : printf("Error: Invalid operator"); break;
+				case LERR_BAD_NUM : printf("Error: Invalid number"); break;
+			}break;
+	}
+}
+
+void lval_println(lval v) {lval_print(v); putchar('\n');}
 
 
 
