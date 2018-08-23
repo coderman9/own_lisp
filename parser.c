@@ -34,7 +34,7 @@ void add_history(char* unused){}
 typedef struct 
 {
 	int type;
-	long num;
+	double num;
 	int err;
 } lval;
 //possible lval types
@@ -45,7 +45,7 @@ enum{LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM};
 //prototypes
 lval eval(mpc_ast_t* t);
 lval eval_op(lval x, char* op, lval y);
-lval lval_num(long x);
+lval lval_num(double x);
 lval lval_err(int x);
 void lval_print(lval v);
 void lval_println(lval v);
@@ -103,7 +103,7 @@ lval eval(mpc_ast_t* t)
 	if(strstr(t->tag, "number"))
 	{
 		errno=0;
-		long x=strtol(t->contents, NULL, 10);
+		double x=strtod(t->contents, NULL);
 		return errno != ERANGE?lval_num(x):lval_err(LERR_BAD_NUM);
 	}
 	//first child is (
@@ -138,7 +138,7 @@ lval eval_op(lval x, char* op, lval y)
 		return y.num==0?lval_err(LERR_DIV_ZERO):lval_num(x.num-y.num*(x.num/y.num));
 	if(strcmp(op, "^")==0)
 	{
-		long r=1;
+		double r=1;
 		for(int i=0; i<y.num; i++)
 			r*=x.num;
 		return lval_num(r);
@@ -150,7 +150,7 @@ lval eval_op(lval x, char* op, lval y)
 	return lval_err(LERR_BAD_OP);
 }
 
-lval lval_num(long x)
+lval lval_num(double x)
 {
 	lval v;
 	v.type = LVAL_NUM;
@@ -170,7 +170,7 @@ void lval_print(lval v)
 {
 	switch(v.type)
 	{
-		case LVAL_NUM: printf("%li", v.num); break;
+		case LVAL_NUM: printf("%f", v.num); break;
 		case LVAL_ERR:
 			switch(v.err)
 			{
