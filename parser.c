@@ -76,6 +76,8 @@ lval* builtin_join(lval* a);
 lval* lval_join(lval* x, lval* y);
 lval* builtin(lval* a, char* func);
 lval* builtin_cons(lval* a);
+lval* builtin_len(lval* a);
+lval* builtin_init(lval* a);
 
 //argc is argument count, argv is argument vector
 //char** is a list of strings (approximately)
@@ -93,7 +95,7 @@ int main(int argc, char** argv)
 	mpca_lang(MPCA_LANG_DEFAULT, 
 	"\
 	 number : /-?[0-9]+(\\.[0-9]+)?/ ; \
-	 symbol : \"cons\" | \"len\" | \"list\" | \"head\" | \"tail\" | \"join\" | \"eval\" | '+' | '-' | '*' | '/' | '%' | '^' | \"min\" | \"max\" ; \
+	 symbol : \"init\" | \"cons\" | \"len\" | \"list\" | \"head\" | \"tail\" | \"join\" | \"eval\" | '+' | '-' | '*' | '/' | '%' | '^' | \"min\" | \"max\" ; \
 	 sexpr: '(' <expr>* ')' ;\
 	 qexpr: '{' <expr>* '}' ;\
 	 expr : <number> | <symbol> | <sexpr> | <qexpr> ; \
@@ -435,7 +437,8 @@ lval* builtin(lval* a, char* func)
 	if(strcmp("join", func)==0) return builtin_join(a);
 	if(strcmp("eval", func)==0) return builtin_eval(a);
 	if(strcmp("cons", func)==0) return builtin_cons(a);
-	if(strcmp("len", func)==0) return lval_num(a->cell[0]->count);
+	if(strcmp("len",  func)==0) return builtin_len(a);
+	if(strcmp("init", func)==0) return builtin_init(a);
 	if(strstr("+-/*^minmax%", func)) return builtin_op(a, func);
 	lval_del(a);
 	return lval_err("Unknown function");
@@ -453,9 +456,25 @@ lval* builtin_cons(lval* a)
 	a->cell[1]->cell[0]=a->cell[0];
 	return a->cell[1];
 }
-	
 
-	
+lval* builtin_len(lval* a)
+{
+	LASSERT(a, a->cell[1]->type==LVAL_QEXPR,
+		"Function 'len' should be passed Q expression");
+	return lval_num(a->cell[0]->count);
+}
+
+lval* builtin_init(lval* a)
+{
+	LASSERT(a, a->cell[1]->type==LVAL_QEXPR,
+		"Function 'init' should be passed Q expression");
+	LASSERT(a, a->count==1, 
+		"Function 'init' passed incorrect number of arguments");
+	free(a->cell[1]->cell[a->cell[1]->count-1]);
+	a->cell[1]->count--;
+	a->cell[1]->cell=realloc(a->cell[1]->cell, sizeof(lval*) * a->cell[1]->count);
+	return a->cell[1];
+}
 
 	
 
